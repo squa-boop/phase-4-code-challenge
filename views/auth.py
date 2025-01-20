@@ -1,7 +1,10 @@
 from flask import Blueprint, request, jsonify
-from models import User, db
+from models import User, db,TokenBlocklist
+from datetime import datetime
+from datetime import timezone
 from werkzeug.security import check_password_hash
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity,get_jwt
+
 
 auth_bp = Blueprint("auth_bp", __name__)
 
@@ -105,53 +108,14 @@ def current_user():
 
     # logout
     
-# Logout (not implementing token blacklisting here)
 @auth_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
-    return jsonify({"message": "Successfully logged out"}), 200
-
-# Update User Profile
-@auth_bp.route("/user/update", methods=["PUT"])
-@jwt_required()
-def update_profile():
-    current_user_id = get_jwt_identity()  # Get the user ID from JWT token
-    data = request.get_json()
-
-    # Fetch the current user from the database
-    user = User.query.get(current_user_id)
-    if not user:
-        return jsonify({"message": "User not found"}), 404
-
-    # Get the new profile data or keep the old values
-    username = data.get('username', user.username)
-    email = data.get('email', user.email)
-
-    # Check if username or email already exists (excluding current user's data)
-    if username != user.username:
-        existing_username = User.query.filter_by(username=username).first()
-        if existing_username:
-            return jsonify({"message": "Username already exists"}), 400
-
-    if email != user.email:
-        existing_email = User.query.filter_by(email=email).first()
-        if existing_email:
-            return jsonify({"message": "Email already exists"}), 400
-
-    # Update user fields
-    user.username = username
-    user.email = email
-
+    jti = get_jwt()["jti"]
+    now = datetime.now(timezone.utc)
+    db.session.add(TokenBlocklist(jti=jti, created_at=now))
     db.session.commit()
-
-    return jsonify({
-        "message": "User profile updated successfully",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
-    }), 200
+    return jsonify({"success ":"Logged out successfully"})
 
 
 # Update User Password
